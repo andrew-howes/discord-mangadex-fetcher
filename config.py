@@ -1,0 +1,13 @@
+firstRun = True
+isAuthed = False
+chapterCache = []
+maxCache = 30
+guild = None
+channel = None
+role = None
+token = None
+subscription_active = False
+stored_username = None
+stored_password = None
+last_updated = None
+secret = None
