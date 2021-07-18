@@ -58,7 +58,7 @@ async def auth(ctx, username, password):
 
 
 
-async def try_auth(username, password, ctx):
+async def try_auth(username, password):
 #make request
     payload = { 'username':username, 'password':password }
     login = await apiCall("/auth/login", "POST", payload)
@@ -72,7 +72,7 @@ async def try_auth(username, password, ctx):
         await storeData()
         return "Success"
     else:
-        await ctx.send("Login Error: {0}".format(login['Error']))
+        #await ctx.send("Login Error: {0}".format(login['Error']))
         return "Error"
 
 
@@ -131,9 +131,9 @@ async def subscription_status(ctx):
 @tasks.loop(seconds = 360)
 async def subscriptionLoop():
     if config.subscription_active is None:
-        log("No Active Subscription")
+        #log("No Active Subscription")
         return
-    print("getting chapters")
+    #print("getting chapters")
     messages = await getFeedChapters(0)
     if messages is not None:
         for m in messages:
@@ -155,15 +155,15 @@ async def getFeedChapters(offset = 0):
     limit = 30
     if config.firstRun:
         limit = 1
-    print("awaiting token")
+    #print("awaiting token")
     is_go = await validateTokens()
     if is_go is False:
-        return
+        return ["Error authenticating, please re-authenticate"]
     #get data from feed
-    print("getting data from feed")
+    #print("getting data from feed")
     payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc"}
     feed = await apiCall("/user/follows/manga/feed", "GET",payload)
-    print("data received from feed")
+    #print("data received from feed")
     #got data
     if 'Error' in feed:
         print("Error received")
@@ -324,10 +324,18 @@ async def validateTokens():
             config.token = refresh['token']
             config.last_updated = datetime.now()
             return True
+        else:
+            config.token = None
+            status = await try_auth(config.stored_username, config.stored_password)
+            if status == "Error":
+                return False
+            else:
+                return True
+
         return False 
     except Exception as e:
-        print(str(e))
-        print("Error validating tokens")
+        #print(str(e))
+        #print("Error validating tokens")
         return False
 
 
