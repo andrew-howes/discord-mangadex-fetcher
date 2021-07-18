@@ -158,6 +158,9 @@ async def getFeedChapters(offset = 0):
     #print("awaiting token")
     is_go = await validateTokens()
     if is_go is False:
+        config.isAuthed = False
+        config.subscription_active = False
+        subscriptionLoop.stop()
         return ["Error authenticating, please re-authenticate"]
     #get data from feed
     #print("getting data from feed")
@@ -166,8 +169,8 @@ async def getFeedChapters(offset = 0):
     #print("data received from feed")
     #got data
     if 'Error' in feed:
-        print("Error received")
-        return None
+        #print("Error received")
+        return ["Error in results"]
     #print(feed)
     chapters = feed['results']
     broken = False
