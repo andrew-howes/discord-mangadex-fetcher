@@ -49,7 +49,7 @@ async def auth(ctx, username, password):
     
     #try to auth
     await ctx.send("trying to auth")
-    status = await try_auth(username, password, ctx)
+    status = await try_auth(username, password)
     if status == "Error":
         await ctx.send("Error authenticating")
     else:
