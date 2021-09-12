@@ -6,6 +6,7 @@ import requests
 from datetime import datetime
 import config
 import json
+import time
 bot = commands.Bot(command_prefix='$')
 
 #globals
@@ -106,8 +107,8 @@ async def subscribe(ctx, args):
 
             await ctx.send("Subscription created successfully")
         except Exception as e:
-            print(str(e))
-            await ctx.send("Uncaught Error")
+            #print(str(e))
+            await ctx.send("Uncaught Error"+ str(e))
 
 @bot.command()
 async def unsubscribe(ctx, temp=None):
@@ -117,15 +118,31 @@ async def unsubscribe(ctx, temp=None):
     config.firstRun = True
     config.subscription_active = False
     #config.chapterCache = []
-    print('unsubscribed')
+    #print('unsubscribed')
     await storeSubscription()
     subscriptionLoop.stop()
     await ctx.send("Successfully unsubscribed")
 
 @bot.command()
-async def subscription_status(ctx):
+async def substatus(ctx):
     await ctx.send("Guild: {0}\nChannel: {1}\nrole: {2}\nfirstRun: {3}\nisActive: {4}".format(str(config.guild.id),
     str(config.channel.id),str(config.role.id),config.firstRun, config.subscription_active))
+
+@bot.command()
+async def resub(ctx):
+    auth_status = await try_auth(config.stored_username, config.stored_password)
+    if auth_status == "Error":
+        subscriptionLoop.stop()
+        time.sleep(300)
+        resub(ctx)
+    else:
+        config.isAuthed = True
+        config.subscription_active = True
+        if subscriptionLoop.is_running():
+            subscriptionLoop.restart()
+        else:
+            await subscriptionLoop.start()
+    
 
 #set loop start
 @tasks.loop(seconds = 360)
@@ -164,15 +181,16 @@ async def getFeedChapters(offset = 0):
         return ["Error authenticating, please re-authenticate"]
     #get data from feed
     #print("getting data from feed")
-    payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc"}
+    payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc","includes[]":["manga","scanlation_group"]}
     feed = await apiCall("/user/follows/manga/feed", "GET",payload)
     #print("data received from feed")
     #got data
+    #print(feed)
     if 'Error' in feed:
         #print("Error received")
         return ["Error in results"]
     #print(feed)
-    chapters = feed['results']
+    chapters = feed['data']
     broken = False
     tempfeed = []
     manga = {}
@@ -184,14 +202,14 @@ async def getFeedChapters(offset = 0):
     #print(chapters)
     for chapter in chapters:
         #check IDs against stored chapters
-        if chapter['data']['id'] in config.chapterCache:
+        if chapter['id'] in config.chapterCache:
             broken = True
             break
         else:
             #print(chapter)
             #if not found, push manga and group names to lists, and push manga to temp
-            chapter_obj = {"id":chapter['data']["id"], "volume":chapter['data']['attributes']['volume'],
-             "chapter":chapter['data']['attributes']['chapter'],"title":chapter['data']['attributes']['title']}
+            chapter_obj = {"id":chapter["id"], "volume":chapter['attributes']['volume'],
+             "chapter":chapter['attributes']['chapter'],"title":chapter['attributes']['title']}
             if chapter_obj["volume"] is None:
                 chapter_obj["volume"] = "Unspecified"
             if chapter_obj["title"] is None:
@@ -201,11 +219,11 @@ async def getFeedChapters(offset = 0):
 
             for r in chapter['relationships']:
                 if r['type'] == "manga":
-                    manga_ids.append(r['id'])
-                    chapter_obj["manga"] = r['id']
+                    #manga_ids.append(r['id'])
+                    chapter_obj["manga"] = r['attributes']['title']['en']
                 elif r['type'] == "scanlation_group":
-                    scan_group_ids.append(r['id'])
-                    chapter_obj["group"] = r['id']
+                    #scan_group_ids.append(r['id'])
+                    chapter_obj["group"] = r['attributes']['name']
             if 'group' not in chapter_obj:
                 chapter_obj["group"] = "No Group"
             tempfeed.append(chapter_obj)
@@ -218,29 +236,29 @@ async def getFeedChapters(offset = 0):
     #if temp list is not empty
     if tempfeed is not None:
         #get group names
-        uniqueGroups = list(set(scan_group_ids))
-        groupPayload = {"limit": len(uniqueGroups), "ids[]": uniqueGroups}
-        groupData = await apiCall("/group","GET", groupPayload)
+        #uniqueGroups = list(set(scan_group_ids))
+        #groupPayload = {"limit": len(uniqueGroups), "ids[]": uniqueGroups}
+        #groupData = await apiCall("/group","GET", groupPayload)
        # if groupData['Error'] is not None:
-        if 'Error' not in groupData:
-            for group in groupData['results']:
-                scanlation_groups[group['data']['id']] = group['data']['attributes']['name']
-        scanlation_groups["No Group"] = 'No Group'
+       #if 'Error' not in groupData:
+        #    for group in groupData['results']:
+        #        scanlation_groups[group['data']['id']] = group['data']['attributes']['name']
+        #scanlation_groups["No Group"] = 'No Group'
         #get manga names
-        uniqueManga = list(set(manga_ids))
-        mangaPayload = {"limit": len(uniqueManga), "ids[]": uniqueManga, "contentRating[]":["safe","suggestive","erotica","pornographic"]}
-        mangaData = await apiCall("/manga","GET", mangaPayload)
+        #uniqueManga = list(set(manga_ids))
+        #mangaPayload = {"limit": len(uniqueManga), "ids[]": uniqueManga, "contentRating[]":["safe","suggestive","erotica","pornographic"]}
+        #mangaData = await apiCall("/manga","GET", mangaPayload)
         #if mangaData['Error'] is not None:
-        if 'Error' not in mangaData:
-            for mang in mangaData['results']:
-                manga[mang['data']['id']] = mang['data']['attributes']['title']['en']
+        #if 'Error' not in mangaData:
+        #    for mang in mangaData['results']:
+        #        manga[mang['data']['id']] = mang['data']['attributes']['title']['en']
         #iterate over temp
         tempfeed.reverse()
         for chap in tempfeed:
             #build messages and store
-            message = "**{0}**\n".format(manga[chap["manga"]])
+            message = "**{0}**\n".format(chap["manga"])
             message += "Volume {0} Chapter {1}\n".format(chap["volume"], chap["chapter"])
-            message += "Title: {0} Group: {1}\n".format(chap["title"], scanlation_groups[chap["group"]])
+            message += "Title: {0} Group: {1}\n".format(chap["title"], chap["group"])
             message += "https://mangadex.org/chapter/{0}".format(chap["id"])
             messages.append(message)
             #push chapter to memory
@@ -304,6 +322,10 @@ async def storeSubscription():
         json.dump(data, f, ensure_ascii=False, indent=4)
     
 
+async def reAuth():
+    time.sleep(300)
+
+    return try_auth(config.stored_username, config.stored_password)
 
 
 async def validateTokens():
@@ -329,7 +351,7 @@ async def validateTokens():
             return True
         else:
             config.token = None
-            status = await try_auth(config.stored_username, config.stored_password)
+            status = await reAuth()
             if status == "Error":
                 return False
             else:
@@ -365,10 +387,10 @@ async def apiCall(endpoint, method = "GET", payload = {}):
         
         if req.status_code > 200:
             if req.status_code == 401:
-                print(req.json())
+                #print(req.json())
                 return {"Error":"Bad Auth"}
             else:
-                print("Error: {0}".format(req.json()))
+                #print("Error: {0}".format(req.json()))
                 return {"Error":"Code "+str(req.status_code)}
             
 
@@ -377,8 +399,8 @@ async def apiCall(endpoint, method = "GET", payload = {}):
         except:
             return {"Error":"Bad JSON"}
     except Exception as e:
-        print(str(e))
-        return {"Error":"Uncaught Error"}
+        #print(str(e))
+        return {"Error":"Uncaught Error: "+str(e)}
 
     
 if os.path.isfile('secret.json'):
