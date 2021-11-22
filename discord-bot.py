@@ -220,7 +220,18 @@ async def getFeedChapters(offset = 0):
             for r in chapter['relationships']:
                 if r['type'] == "manga":
                     #manga_ids.append(r['id'])
-                    chapter_obj["manga"] = r['attributes']['title']['en']
+                    if 'en' in r['attributes']['title']:
+                        chapter_obj["manga"] = r['attributes']['title']['en']
+                    elif 'altTitles' in r['attributes']:
+                        chapter_obj["manga"] = ""
+                        for item in r['attributes']['altTitles']:
+                            if 'en' in item:
+                                chapter_obj["manga"] = item['en']
+                                break
+                        if chapter_obj["manga"] == "":
+                            chapter_obj["manga"] = "No English Title"
+                    else:
+                        chapter_obj["manga"] = "No English Title"
                 elif r['type'] == "scanlation_group":
                     #scan_group_ids.append(r['id'])
                     chapter_obj["group"] = r['attributes']['name']
@@ -326,6 +337,7 @@ async def reAuth():
     time.sleep(300)
 
     return try_auth(config.stored_username, config.stored_password)
+    
 
 
 async def validateTokens():
