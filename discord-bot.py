@@ -4,6 +4,7 @@ from discord.ext import tasks
 from discord.ext import commands
 import requests
 from datetime import datetime
+from dateutil import parser
 import config
 import json
 import time
@@ -201,6 +202,9 @@ async def getFeedChapters(offset = 0):
     #print("starting chapter loop")
     #print(chapters)
     for chapter in chapters:
+        #workaround for MangaPlus - ignore chapter if publishAt is greater than current time.
+        if parser.parse(chapter['attributes']['publishAt'],ignoretz=True) > datetime.now():
+            continue
         #check IDs against stored chapters
         if chapter['id'] in config.chapterCache:
             broken = True
@@ -240,7 +244,8 @@ async def getFeedChapters(offset = 0):
             tempfeed.append(chapter_obj)
     #if last chapter wasn't found, get more from feed.
     if broken is False and config.firstRun is False:
-        messages = getFeedChapters(offset+limit)
+        more_messages = await getFeedChapters(offset+limit)
+        messages.append(more_messages)
 
     ##not implemented
 
