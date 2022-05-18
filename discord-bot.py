@@ -184,6 +184,14 @@ async def clear_ignored_uploaders(ctx):
     await ctx.send("Ignored Uploaders: {0}".format(str(config.ignoredUploaders)))
 
 @bot.command()
+async def force_update(ctx):
+    messages = await getFeedChapters(0)
+    if messages is not None:
+        for m in messages:
+            discordMessage = "{0}\n{1}".format(config.role.mention, m)
+            await config.channel.send(discordMessage)
+
+@bot.command()
 async def substatus(ctx):
     await ctx.send("Guild: {0}\nChannel: {1}\nrole: {2}\nfirstRun: {3}\nisActive: {4}".format(str(config.guild.id),
     str(config.channel.id),str(config.role.id),config.firstRun, config.subscription_active))
