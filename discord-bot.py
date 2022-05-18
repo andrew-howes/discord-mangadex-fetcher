@@ -111,6 +111,8 @@ async def subscribe(ctx, args):
             #print(str(e))
             await ctx.send("Uncaught Error"+ str(e))
 
+
+
 @bot.command()
 async def unsubscribe(ctx, temp=None):
     #config.guild = None
@@ -123,6 +125,63 @@ async def unsubscribe(ctx, temp=None):
     await storeSubscription()
     subscriptionLoop.stop()
     await ctx.send("Successfully unsubscribed")
+
+@bot.command()
+async def ignore_group(ctx, arg):
+    if arg not in config.ignoredGroups:
+        config.ignoredGroups.append(arg);
+    #config.chapterCache = []
+    #print('unsubscribed')
+    await storeSubscription()
+    await ctx.send("Ignored!")
+    await ctx.send("Ignored Groups: {0}".format(str(config.ignoredGroups)))
+
+@bot.command()
+async def unignore_group(ctx, arg):
+    if arg in config.ignoredGroups:
+        config.ignoredGroups.remove(arg);
+    #config.chapterCache = []
+    #print('unsubscribed')
+    await storeSubscription()
+    await ctx.send("Unignored!")
+    await ctx.send("Ignored Groups: {0}".format(str(config.ignoredGroups)))
+
+@bot.command()
+async def clear_ignored_groups(ctx):
+    config.ignoredGroups = []
+    #config.chapterCache = []
+    #print('unsubscribed')
+    await storeSubscription()
+    await ctx.send("Cleared!")
+    await ctx.send("Ignored Groups: {0}".format(str(config.ignoredGroups)))
+
+@bot.command()
+async def ignore_uploader(ctx, arg):
+    if arg not in config.ignoredUploaders:
+        config.ignoredUploaders.append(arg);
+    #config.chapterCache = []
+    #print('unsubscribed')
+    await storeSubscription()
+    await ctx.send("Ignored!")
+    await ctx.send("Ignored Uploaders: {0}".format(str(config.ignoredUploaders)))
+
+@bot.command()
+async def unignore_uploader(ctx, arg):
+    if arg in config.ignoredUploaders:
+        config.ignoredUploaders.remove(arg);
+    #config.chapterCache = []
+    #print('unsubscribed')
+    await storeSubscription()
+    await ctx.send("Ignored!")
+    await ctx.send("Ignored Uploaders: {0}".format(str(config.ignoredUploaders)))
+
+@bot.command()
+async def clear_ignored_uploaders(ctx):
+    config.ignoredUploaders = []
+
+    await storeSubscription()
+    await ctx.send("Cleared!")
+    await ctx.send("Ignored Uploaders: {0}".format(str(config.ignoredUploaders)))
 
 @bot.command()
 async def substatus(ctx):
@@ -182,7 +241,8 @@ async def getFeedChapters(offset = 0):
         return ["Error authenticating, please re-authenticate"]
     #get data from feed
     #print("getting data from feed")
-    payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc","includes[]":["manga","scanlation_group"]}
+    payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc","includes[]":["manga","scanlation_group"],
+    "excludedGroups[]":config.ignoredGroups,"excludedUploaders[]":config.ignoredUploaders}
     feed = await apiCall("/user/follows/manga/feed", "GET",payload)
     #print("data received from feed")
     #got data
@@ -203,8 +263,8 @@ async def getFeedChapters(offset = 0):
     #print(chapters)
     for chapter in chapters:
         #workaround for MangaPlus - ignore chapter if publishAt is greater than current time.
-        if parser.parse(chapter['attributes']['publishAt'],ignoretz=True) > datetime.now():
-            continue
+        #if parser.parse(chapter['attributes']['publishAt'],ignoretz=True) > datetime.now():
+            #continue
         #check IDs against stored chapters
         if chapter['id'] in config.chapterCache:
             broken = True
@@ -323,6 +383,15 @@ async def loadSubscription():
             role_id = data['role']
             config.role = config.guild.get_role(role_id)
             config.subscription_active = data['subscription_active']
+            if 'ignoredUploaders' in data:
+                config.ignoredGroups = data['ignoredGroups']
+            else:
+                config.ignoredGroups = []
+            if 'ignoredUploaders' in data:
+                config.ignoredUploaders = data['ignoredUploaders']
+            else:
+                config.ignoredUploaders = []
+
             print('subscription loaded')
             if subscriptionLoop.is_running():
                 subscriptionLoop.restart()
@@ -333,7 +402,8 @@ async def loadSubscription():
 async def storeSubscription():
     #if config.subscription_active is True:
     data = {"guild":config.guild.id, "channel":config.channel.id, "role":config.role.id, 
-    "subscription_active": config.subscription_active, "chapterCache":config.chapterCache, "firstRun": config.firstRun}
+    "subscription_active": config.subscription_active, "chapterCache":config.chapterCache, "firstRun": config.firstRun,
+    "ignoredGroups":config.ignoredGroups, "ignoredUploaders":config.ignoredUploaders}
     with open('subscription.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     

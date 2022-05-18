@@ -11,3 +11,5 @@ stored_username = None
 stored_password = None
 last_updated = None
 secret = None
+ignoredGroups = []
+ignoredUploaders = []

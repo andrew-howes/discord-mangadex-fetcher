@@ -7,3 +7,10 @@ subscription.json
 userdata.json
 run
 mdex-txt.txt
+eternal-cards.json
+eternal-length.json
+eternal.py
+discord-bot copy.py
+.DS_Store
+__pycache__/config.cpython-36.pyc
+get-pip.py
