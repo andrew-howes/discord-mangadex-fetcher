@@ -10,21 +10,6 @@ import json
 import time
 bot = commands.Bot(command_prefix='$')
 
-#globals
-#config.firstRun = True
-#config.isAuthed = []
-#config.chapterCache = []
-#config.maxCache = 30
-#guild = []
-#config.channel = []
-#config.role = []
-#config.token = []
-#config.subscription_active = False
-#config.stored_username = []
-#config.stored_password = []
-#config.last_updated = []
-#client = discord.Client()
-
 @bot.event
 async def on_ready():
     #check for stored credentials
@@ -111,17 +96,76 @@ async def subscribe(ctx, args):
             #print(str(e))
             await ctx.send("Uncaught Error"+ str(e))
 
+@bot.command()
+async def list_sub(ctx, list):
+    if config.token is None:
+        await ctx.send("Error: No logged-in user")
+    else:
+        try:
+            #print("blah")
+            list = list
+            print(list)
+            guild = ctx.message.guild
+            #print("blah 2")
+            if ctx.message.channel_mentions is None:
+                channel = ctx.message.channel
+            else:
+                channel = ctx.message.channel_mentions[0]
+            #print("blah 3")
+            if ctx.message.role_mentions is None:
+                role = []
+            else:
+                role = ctx.message.role_mentions[0]
 
+
+            await add_list(list, guild, channel, role, True, True, [])
+            #print(config.subscribedLists)
+            print(1)
+            await storeSubscription()
+            print(2)
+            if subscriptionLoop.is_running():
+                subscriptionLoop.restart()
+            else:
+                await subscriptionLoop.start()
+
+            await ctx.send("Subscription created successfully")
+        except Exception as e:
+            print(str(e))
+            await ctx.send("Uncaught Error"+ str(e))
+
+
+async def add_list(guid, guild, channel, role, active, firstRun, chapterCache):
+    listdef = {"guid": guid, "guild": guild, "channel": channel, "role": role, "firstRun": firstRun, "subscription_active": active, "chapterCache": chapterCache}
+    
+    if config.subscribedLists is []:
+        config.subscribedLists.append(listdef)
+    elif guid in [x.guid for x in config.subscribedLists]:
+        config.subscribedLists = [listdef if x.guid == guid else x for x in config.subscribedLists]
+    else:
+        config.subscribedLists.append(listdef)
+
+async def update_list(list):
+    if config.subscribedLists is []:
+        config.subscribedLists.append(list)
+    elif list['guid'] in [x['guid'] for x in config.subscribedLists]:
+        config.subscribedLists = [list if x['guid'] == list['guid'] else x for x in config.subscribedLists]
+    else:
+        config.subscribedLists.append(list)
+
+async def removelist(guid):
+    config.subscribedLists = [x for x in config.subscribedLists if not x['guid'] == guid]
+
+@bot.command()
+async def remove_list(ctx, arg):
+    await removelist(arg)
+    await storeSubscription()
+    
+    await ctx.send("Successfully unsubscribed from list")
 
 @bot.command()
 async def unsubscribe(ctx, temp=None):
-    #config.guild = None
-    #config.channel = None
-    #config.role = None
     config.firstRun = True
     config.subscription_active = False
-    #config.chapterCache = []
-    #print('unsubscribed')
     await storeSubscription()
     subscriptionLoop.stop()
     await ctx.send("Successfully unsubscribed")
@@ -130,8 +174,6 @@ async def unsubscribe(ctx, temp=None):
 async def ignore_group(ctx, arg):
     if arg not in config.ignoredGroups:
         config.ignoredGroups.append(arg);
-    #config.chapterCache = []
-    #print('unsubscribed')
     await storeSubscription()
     await ctx.send("Ignored!")
     await ctx.send("Ignored Groups: {0}".format(str(config.ignoredGroups)))
@@ -140,8 +182,6 @@ async def ignore_group(ctx, arg):
 async def unignore_group(ctx, arg):
     if arg in config.ignoredGroups:
         config.ignoredGroups.remove(arg);
-    #config.chapterCache = []
-    #print('unsubscribed')
     await storeSubscription()
     await ctx.send("Unignored!")
     await ctx.send("Ignored Groups: {0}".format(str(config.ignoredGroups)))
@@ -149,8 +189,6 @@ async def unignore_group(ctx, arg):
 @bot.command()
 async def clear_ignored_groups(ctx):
     config.ignoredGroups = []
-    #config.chapterCache = []
-    #print('unsubscribed')
     await storeSubscription()
     await ctx.send("Cleared!")
     await ctx.send("Ignored Groups: {0}".format(str(config.ignoredGroups)))
@@ -159,8 +197,6 @@ async def clear_ignored_groups(ctx):
 async def ignore_uploader(ctx, arg):
     if arg not in config.ignoredUploaders:
         config.ignoredUploaders.append(arg);
-    #config.chapterCache = []
-    #print('unsubscribed')
     await storeSubscription()
     await ctx.send("Ignored!")
     await ctx.send("Ignored Uploaders: {0}".format(str(config.ignoredUploaders)))
@@ -224,6 +260,15 @@ async def subscriptionLoop():
         for m in messages:
             discordMessage = "{0}\n{1}".format(config.role.mention, m)
             await config.channel.send(discordMessage)
+    
+    for list in config.subscribedLists:
+        messages2 = await getListChapters(list, 0)
+        if messages2 is not None:
+            for m in messages2:
+                discordMessage = "{0}\n{1}".format(list['role'].mention, m)
+                await list['channel'].send(discordMessage)
+    await storeSubscription()
+    
 
     
 #get feed chapters
@@ -262,10 +307,6 @@ async def getFeedChapters(offset = 0):
     chapters = feed['data']
     broken = False
     tempfeed = []
-    manga = {}
-    manga_ids = []
-    scanlation_groups = {}
-    scan_group_ids = []
     messages = []
     #print("starting chapter loop")
     #print(chapters)
@@ -291,7 +332,6 @@ async def getFeedChapters(offset = 0):
 
             for r in chapter['relationships']:
                 if r['type'] == "manga":
-                    #manga_ids.append(r['id'])
                     if 'en' in r['attributes']['title']:
                         chapter_obj["manga"] = r['attributes']['title']['en']
                     elif 'altTitles' in r['attributes']:
@@ -305,7 +345,6 @@ async def getFeedChapters(offset = 0):
                     else:
                         chapter_obj["manga"] = "No English Title"
                 elif r['type'] == "scanlation_group":
-                    #scan_group_ids.append(r['id'])
                     chapter_obj["group"] = r['attributes']['name']
             if 'group' not in chapter_obj:
                 chapter_obj["group"] = "No Group"
@@ -315,27 +354,8 @@ async def getFeedChapters(offset = 0):
         more_messages = await getFeedChapters(offset+limit)
         messages.append(more_messages)
 
-    ##not implemented
-
     #if temp list is not empty
     if tempfeed is not None:
-        #get group names
-        #uniqueGroups = list(set(scan_group_ids))
-        #groupPayload = {"limit": len(uniqueGroups), "ids[]": uniqueGroups}
-        #groupData = await apiCall("/group","GET", groupPayload)
-       # if groupData['Error'] is not None:
-       #if 'Error' not in groupData:
-        #    for group in groupData['results']:
-        #        scanlation_groups[group['data']['id']] = group['data']['attributes']['name']
-        #scanlation_groups["No Group"] = 'No Group'
-        #get manga names
-        #uniqueManga = list(set(manga_ids))
-        #mangaPayload = {"limit": len(uniqueManga), "ids[]": uniqueManga, "contentRating[]":["safe","suggestive","erotica","pornographic"]}
-        #mangaData = await apiCall("/manga","GET", mangaPayload)
-        #if mangaData['Error'] is not None:
-        #if 'Error' not in mangaData:
-        #    for mang in mangaData['results']:
-        #        manga[mang['data']['id']] = mang['data']['attributes']['title']['en']
         #iterate over temp
         tempfeed.reverse()
         for chap in tempfeed:
@@ -352,8 +372,105 @@ async def getFeedChapters(offset = 0):
 
     if config.firstRun == True:
         config.firstRun = False
+
+    #return message strings
+    return messages
+
+
+async def getListChapters(list, offset = 0):
+    #check config.isAuthed
+    limit = 30
+    if list['firstRun']:
+        limit = 1
+    #print("awaiting token")
+    is_go = await validateTokens()
+    if is_go is False:
+        config.isAuthed = False
+        list['subscription_active'] = False
+        subscriptionLoop.stop()
+        return ["Error authenticating, please re-authenticate"]
+    #get data from feed
+    #print("getting data from feed")
+    payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc","includes[]":["manga","scanlation_group"],
+    "excludedGroups[]":config.ignoredGroups,"excludedUploaders[]":config.ignoredUploaders}
+    feed = await apiCall("/list/{0}/feed".format(list['guid']), "GET",payload)
+    #print("data received from feed")
+    #got data
+    #print(feed)
+    if 'Error' in feed:
+        #print("Error received")
+        return ["Error in results"]
+    #print(feed)
+    chapters = feed['data']
+    broken = False
+    tempfeed = []
+    messages = []
+    #print("starting chapter loop")
+    #print(chapters)
+    for chapter in chapters:
+        #workaround for MangaPlus - ignore chapter if publishAt is greater than current time.
+        #if parser.parse(chapter['attributes']['publishAt'],ignoretz=True) > datetime.now():
+            #continue
+        #check IDs against stored chapters
+        if chapter['id'] in list['chapterCache']:
+            broken = True
+            break
+        else:
+            #print(chapter)
+            #if not found, push manga and group names to lists, and push manga to temp
+            chapter_obj = {"id":chapter["id"], "volume":chapter['attributes']['volume'],
+             "chapter":chapter['attributes']['chapter'],"title":chapter['attributes']['title']}
+            if chapter_obj["volume"] is None:
+                chapter_obj["volume"] = "Unspecified"
+            if chapter_obj["title"] is None:
+                chapter_obj["title"] = "Chapter "+chapter_obj["chapter"]
+            
+            
+
+            for r in chapter['relationships']:
+                if r['type'] == "manga":
+                    if 'en' in r['attributes']['title']:
+                        chapter_obj["manga"] = r['attributes']['title']['en']
+                    elif 'altTitles' in r['attributes']:
+                        chapter_obj["manga"] = ""
+                        for item in r['attributes']['altTitles']:
+                            if 'en' in item:
+                                chapter_obj["manga"] = item['en']
+                                break
+                        if chapter_obj["manga"] == "":
+                            chapter_obj["manga"] = "No English Title"
+                    else:
+                        chapter_obj["manga"] = "No English Title"
+                elif r['type'] == "scanlation_group":
+                    chapter_obj["group"] = r['attributes']['name']
+            if 'group' not in chapter_obj:
+                chapter_obj["group"] = "No Group"
+            tempfeed.append(chapter_obj)
+    #if last chapter wasn't found, get more from feed.
+    if broken is False and list['firstRun'] is False:
+        more_messages = await getListChapters(list, offset+limit)
+        messages.append(more_messages)
+
+
+    #if temp list is not empty
+    if tempfeed is not None:
+        tempfeed.reverse()
+        for chap in tempfeed:
+            #build messages and store
+            message = "**{0}**\n".format(chap["manga"])
+            message += "Volume {0} Chapter {1}\n".format(chap["volume"], chap["chapter"])
+            message += "Title: {0} Group: {1}\n".format(chap["title"], chap["group"])
+            message += "https://mangadex.org/chapter/{0}".format(chap["id"])
+            messages.append(message)
+            #push chapter to memory
+            list['chapterCache'].insert(0,chap["id"])
+        #trim memory
+        del list['chapterCache'][10:]
+
+    if list['firstRun'] == True:
+        list['firstRun'] = False
     
-    await storeSubscription()
+    await update_list(list)
 
     #return message strings
     return messages
@@ -399,6 +516,11 @@ async def loadSubscription():
                 config.ignoredUploaders = data['ignoredUploaders']
             else:
                 config.ignoredUploaders = []
+            
+            if 'subscribedLists' in data:
+                await deserializeList(data['subscribedLists'])
+            else:
+                config.subscribedLists = []
 
             print('subscription loaded')
             if subscriptionLoop.is_running():
@@ -408,13 +530,27 @@ async def loadSubscription():
 
 
 async def storeSubscription():
+
     #if config.subscription_active is True:
     data = {"guild":config.guild.id, "channel":config.channel.id, "role":config.role.id, 
     "subscription_active": config.subscription_active, "chapterCache":config.chapterCache, "firstRun": config.firstRun,
-    "ignoredGroups":config.ignoredGroups, "ignoredUploaders":config.ignoredUploaders}
+    "ignoredGroups":config.ignoredGroups, "ignoredUploaders":config.ignoredUploaders, "subscribedLists": await serializeLists()}
     with open('subscription.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
     
+
+async def serializeLists():
+    listjson = []
+    for x in config.subscribedLists:
+        listjson.append({"guid": x['guid'], "guild": x['guild'].id, "channel": x['channel'].id, "role": x['role'].id, "firstRun": x['firstRun'], "subscription_active": x['subscription_active'], "chapterCache": x['chapterCache'] })
+    return listjson
+
+async def deserializeList(obj):
+    config.subscribedLists = []
+    for x in obj:
+        guild = bot.get_guild(x['guild'])
+        await add_list(x['guid'], guild, bot.get_channel(x['channel']), guild.get_role(x['role']), x['subscription_active'], x['firstRun'], x['chapterCache'])
 
 async def reAuth():
     time.sleep(300)
