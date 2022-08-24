@@ -295,7 +295,7 @@ async def getFeedChapters(offset = 0):
     #get data from feed
     #print("getting data from feed")
     payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc","includes[]":["manga","scanlation_group"],
-    "excludedGroups[]":config.ignoredGroups,"excludedUploaders[]":config.ignoredUploaders}
+    "excludedGroups[]":config.ignoredGroups,"excludedUploaders[]":config.ignoredUploaders, "contentRating[]":["safe","suggestive","erotica","pornographic"]}
     feed = await apiCall("/user/follows/manga/feed", "GET",payload)
     #print("data received from feed")
     #got data
@@ -392,7 +392,7 @@ async def getListChapters(list, offset = 0):
     #get data from feed
     #print("getting data from feed")
     payload = {"limit":limit, "translatedLanguage[]":"en", "offset":offset,"order[publishAt]":"desc","includes[]":["manga","scanlation_group"],
-    "excludedGroups[]":config.ignoredGroups,"excludedUploaders[]":config.ignoredUploaders}
+    "excludedGroups[]":config.ignoredGroups,"excludedUploaders[]":config.ignoredUploaders, "contentRating[]":["safe","suggestive","erotica","pornographic"]}
     feed = await apiCall("/list/{0}/feed".format(list['guid']), "GET",payload)
     #print("data received from feed")
     #got data
