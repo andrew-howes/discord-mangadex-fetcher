@@ -140,7 +140,7 @@ async def add_list(guid, guild, channel, role, active, firstRun, chapterCache):
     if config.subscribedLists is []:
         config.subscribedLists.append(listdef)
     elif guid in [x['guid'] for x in config.subscribedLists]:
-        config.subscribedLists = [listdef if x.guid == guid else x for x in config.subscribedLists]
+        config.subscribedLists = [listdef if x['guid'] == guid else x for x in config.subscribedLists]
     else:
         config.subscribedLists.append(listdef)
 
