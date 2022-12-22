@@ -554,8 +554,9 @@ async def deserializeList(obj):
 
 async def reAuth():
     time.sleep(300)
+    result = await try_auth(config.stored_username, config.stored_password)
 
-    return try_auth(config.stored_username, config.stored_password)
+    return result
     
 
 
@@ -567,10 +568,10 @@ async def validateTokens():
         if (datetime.now() - config.last_updated).total_seconds() < 890:
             return True
         
-        check = await apiCall("/auth/check")
-        if check['isAuthenticated']:
+        #check = await apiCall("/auth/check")
+        #if check['isAuthenticated']:
             #global token = check.token
-            return True
+            #return True
         
         #print(config.token)
 
