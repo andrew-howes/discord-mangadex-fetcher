@@ -235,6 +235,7 @@ async def substatus(ctx):
 @bot.command()
 async def resub(ctx):
     auth_status = await try_auth(config.stored_username, config.stored_password)
+
     if auth_status == "Error":
         subscriptionLoop.stop()
         time.sleep(300)
@@ -302,7 +303,8 @@ async def getFeedChapters(offset = 0):
     #print(feed)
     if 'Error' in feed:
         #print("Error received")
-        return ["Error in results"]
+        return ["Error in Results: "+feed['Error']]
+       #return ["Error in results"]
     #print(feed)
     chapters = feed['data']
     broken = False
@@ -399,7 +401,8 @@ async def getListChapters(list, offset = 0):
     #print(feed)
     if 'Error' in feed:
         #print("Error received")
-        return ["Error in results"]
+        return ["Error in Results: "+feed['Error']]
+        #return ["Error in results"]
     #print(feed)
     chapters = feed['data']
     broken = False
@@ -486,13 +489,33 @@ async def loadData():
             config.token = data['token']
             temp_time = data['last_updated']
             config.last_updated = datetime.fromtimestamp(temp_time)
-    
+            if 'client_id' in data:
+                config.client_id = data['client_id']
+            else:
+                config.client_id = []
+            if 'client_secret' in data:
+                config.client_secret = data['client_secret']
+            else:
+                config.client_secret = []
+            if 'access_token' in data:
+                config.access_token = data['access_token']
+            else:
+                config.access_token = []
+            if 'refresh_token' in data:
+                config.refresh_token = data['refresh_token']
+            else:
+                config.refresh_token = []   
 
 async def storeData():
-    if config.isAuthed is True:
-        data = {"username":config.stored_username, "password":config.stored_password, "token":config.token, "last_updated":config.last_updated.timestamp()}
-        with open('userdata.json', 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        if config.isAuthed is True:
+            data = {"username":config.stored_username, "password":config.stored_password, "token":config.token, "last_updated":config.last_updated.timestamp(),"client_id":config.client_id, "client_secret":config.client_secret, "access_token": config.access_token, "refresh_token": config.refresh_token}
+            with open('userdata.json', 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+
+    except:
+        print("Error storing data")
+
 #store username/password/last cached chapter ID so they persist across sessions
 
 async def loadSubscription():
@@ -557,7 +580,122 @@ async def reAuth():
     result = await try_auth(config.stored_username, config.stored_password)
 
     return result
+
+
+async def tryClientAuth(username, password, client_id, client_secret):
+    try:
+        creds = {
+            "grant_type": "password",
+            "username": username,
+            "password": password,
+            "client_id": client_id,
+            "client_secret": client_secret
+        }
+
+        r = requests.post(
+            "https://auth.mangadex.org/realms/mangadex/protocol/openid-connect/token",
+            data=creds
+        )
+        r_json = r.json()
+        print(r_json)
+
+        config.access_token = r_json["access_token"]
+        config.refresh_token = r_json["refresh_token"]
+
+        config.stored_username = username
+        config.stored_password = password
+        config.client_id = client_id
+        config.client_secret = client_secret
+
+        await storeData()
+        print("Success")
+        return "Success"
+    except: 
+        print("Error")
+        return "Error"
+
+async def clientReAuth():
+    time.sleep(300)
+    result = await tryClientAuth(config.stored_username, config.stored_password, config.client_id, config.client_secret)
+
+    return result
+
+@bot.command()
+async def clientSetup(ctx, username, password, client_id, client_secret):
     
+    #try to auth
+    await ctx.send("trying to auth")
+    status = await tryClientAuth(username, password, client_id, client_secret)
+    if status == "Error":
+        await ctx.send("Error authenticating")
+    else:
+        await ctx.send("Login Successful!")
+    await ctx.message.delete()
+
+@bot.command()
+async def addClient(ctx, client_id, client_secret):
+    
+    #try to auth
+    await ctx.send("trying to auth")
+    status = await tryClientAuth(config.stored_username, config.stored_username, client_id, client_secret)
+    if status == "Error":
+        await ctx.send("Error authenticating")
+    else:
+        await ctx.send("Login Successful!")
+    await ctx.message.delete()
+
+async def clientRefresh():
+    try:
+        creds = {
+        "grant_type": "refresh_token",
+        "refresh_token": config.refresh_token,
+        "client_id": config.client_id,
+        "client_secret": config.client_secret
+        }
+
+        r = requests.post(
+            "https://auth.mangadex.org/realms/mangadex/protocol/openid-connect/token",
+            data=creds,
+        )
+
+        config.access_token = r.json()["access_token"]
+        
+        return True
+    except: 
+        return False
+
+
+async def clientValidateTokens():
+    try:
+        if config.last_updated is None:
+            return False
+
+        if (datetime.now() - config.last_updated).total_seconds() < 890:
+            return True
+        
+        #check = await apiCall("/auth/check")
+        #if check['isAuthenticated']:
+            #global token = check.token
+            #return True
+        
+        #print(config.token)
+
+        if await clientRefresh() is True:
+            config.last_updated = datetime.now()
+            return True
+        else:
+            config.token = None
+            status = await clientReAuth()
+            if status == "Error":
+                return False
+            else:
+                return True
+
+        return False 
+    except Exception as e:
+        #print(str(e))
+        #print("Error validating tokens")
+        return False
 
 
 async def validateTokens():

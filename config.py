@@ -13,3 +13,8 @@ channel = None
 role = None
 subscription_active = False
 subscribedLists = []
+#client stuff
+client_id = None
+client_secret = None
+access_token = None
+refresh_token = None
